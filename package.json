@@ -1,5 +1,5 @@
 {
-  "name": "debatemate-tech-ai",
+  "name": "hackru-2025",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -39,7 +39,7 @@
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
     "@vercel/analytics": "latest",
-    "ai": "5.0.60",
+    "ai": "^5.0.60",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -73,17 +73,18 @@
     "tw-animate-css": "latest",
     "vaul": "latest",
     "yaml": "latest",
-    "zod": "3.25.67"
+    "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "5.0.4",
+    "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "typescript": "^5",
-    "vite": "7.1.9"
+    "vite": "^7.1.9"
   }
 }
