@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserByEmail } from "@/lib/db-helpers"
+import { getUserByEmail, verifyPassword } from "@/lib/db-helpers"
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,9 +16,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
     }
 
-    // In production, you would verify the password hash here
-    // For now, we'll do a simple check (NOT SECURE - implement proper password hashing)
-    // TODO: Implement bcrypt password verification
+    // Check if user has a password hash (for users created before password system)
+    if (!user.password_hash) {
+      return NextResponse.json({ 
+        error: "Account requires password reset. Please contact support." 
+      }, { status: 401 })
+    }
+
+    // Verify the password
+    const isPasswordValid = await verifyPassword(password, user.password_hash)
+    
+    if (!isPasswordValid) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
+    }
 
     return NextResponse.json({
       user: {

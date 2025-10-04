@@ -2,9 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getSnowflakeClient } from "@/lib/snowflake"
 import { getDebateMessages } from "@/lib/db-helpers"
 
-export async function GET(request: NextRequest, { params }: { params: { debateId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ debateId: string }> }) {
   try {
-    const { debateId } = params
+    const { debateId } = await params
 
     if (!debateId) {
       return NextResponse.json({ error: "Debate ID is required" }, { status: 400 })
@@ -19,8 +19,21 @@ export async function GET(request: NextRequest, { params }: { params: { debateId
 
     const messages = await getDebateMessages(debateId)
 
+    // Handle Snowflake column case conversion for debate data
+    const debate = debateResult.data[0]
+    const formattedDebate = {
+      id: debate.ID || debate.id,
+      topic: debate.TOPIC || debate.topic,
+      position: debate.POSITION || debate.position,
+      opponent_type: debate.OPPONENT_TYPE || debate.opponent_type,
+      status: debate.STATUS || debate.status,
+      turn_count: debate.TURN_COUNT || debate.turn_count,
+      created_at: debate.CREATED_AT || debate.created_at,
+      completed_at: debate.COMPLETED_AT || debate.completed_at,
+    }
+
     return NextResponse.json({
-      debate: debateResult.data[0],
+      debate: formattedDebate,
       messages,
     })
   } catch (error) {

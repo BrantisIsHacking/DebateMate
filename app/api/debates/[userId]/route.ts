@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getUserDebates } from "@/lib/db-helpers"
 
-export async function GET(request: NextRequest, { params }: { params: { userId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    const { userId } = params
+    const { userId } = await params
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })

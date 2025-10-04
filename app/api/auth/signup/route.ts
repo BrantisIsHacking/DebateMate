@@ -20,8 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create new user
-    // TODO: Hash password with bcrypt before storing
-    const user = await createUser(email, name)
+    const user = await createUser(email, name, password)
 
     return NextResponse.json({
       user: {

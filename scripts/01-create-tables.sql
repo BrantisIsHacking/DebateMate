@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(36) PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
   updated_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP()
 );
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS debates (
   position VARCHAR(10) NOT NULL, -- 'for' or 'against'
   opponent_type VARCHAR(50) NOT NULL, -- 'politician', 'scientist', 'activist', etc.
   status VARCHAR(20) DEFAULT 'in_progress', -- 'in_progress', 'completed', 'abandoned'
+  turn_count INTEGER DEFAULT 0,
   duration_seconds INTEGER DEFAULT 0,
   created_at TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
   completed_at TIMESTAMP_NTZ,
@@ -29,6 +31,7 @@ CREATE TABLE IF NOT EXISTS debate_messages (
   debate_id VARCHAR(36) NOT NULL,
   role VARCHAR(20) NOT NULL, -- 'user' or 'assistant'
   content TEXT NOT NULL,
+  fallacies_detected TEXT, -- JSON string of detected fallacies
   timestamp TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
   FOREIGN KEY (debate_id) REFERENCES debates(id)
 );

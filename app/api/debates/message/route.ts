@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateText } from "ai"
+import { google } from "@ai-sdk/google"
 import { getSnowflakeClient } from "@/lib/snowflake"
 import { analyzeArgument, detectFallacies } from "@/lib/ai-helpers"
 
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     // Get conversation history
     const historyResult = await db.query(
-      `SELECT role, content FROM debate_messages WHERE debate_id = ? ORDER BY created_at ASC`,
+      `SELECT role, content FROM debate_messages WHERE debate_id = ? ORDER BY timestamp ASC`,
       [debateId],
     )
     const history = historyResult.data
@@ -30,16 +31,22 @@ export async function POST(request: NextRequest) {
     // Analyze user's argument for fallacies and score it
     const [fallacies, scores] = await Promise.all([detectFallacies(message), analyzeArgument(message)])
 
-    // Save user message with analysis
+    // Save user message
     const userMessageId = crypto.randomUUID()
     await db.execute(
-      `INSERT INTO debate_messages (id, debate_id, role, content, fallacies_detected, clarity_score, evidence_score, logic_score, persuasiveness_score, overall_score, created_at)
-       VALUES (?, ?, 'user', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())`,
+      `INSERT INTO debate_messages (id, debate_id, role, content, fallacies_detected, timestamp)
+       VALUES (?, ?, 'user', ?, ?, CURRENT_TIMESTAMP())`,
+      [userMessageId, debateId, message, JSON.stringify(fallacies)],
+    )
+
+    // Save user argument scores separately
+    await db.execute(
+      `INSERT INTO argument_scores (id, debate_id, message_id, clarity_score, evidence_score, logic_score, persuasiveness_score, overall_score, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP())`,
       [
-        userMessageId,
+        crypto.randomUUID(),
         debateId,
-        message,
-        JSON.stringify(fallacies),
+        userMessageId,
         scores.clarity,
         scores.evidence,
         scores.logic,
@@ -59,21 +66,25 @@ Your arguing style should match your persona. Keep responses focused, persuasive
 Address the opponent's points directly and present strong counterarguments.`
 
     const conversationHistory = history.map((msg: any) => ({
-      role: msg.role === "user" ? "user" : "assistant",
-      content: msg.content,
-    }))
-
+      role: (msg.ROLE || msg.role) === "user" ? "user" : "assistant",
+      content: msg.CONTENT || msg.content,
+    })) as Array<{role: "user" | "assistant", content: string}>
+    
     const { text: aiResponse } = await generateText({
-      model: "openai/gpt-4o-mini",
-      messages: [{ role: "system", content: systemPrompt }, ...conversationHistory, { role: "user", content: message }],
+      model: google("gemini-1.5-flash"),
+      messages: [
+        { role: "system" as const, content: systemPrompt }, 
+        ...conversationHistory, 
+        { role: "user" as const, content: message }
+      ],
       temperature: 0.8,
-      maxTokens: 300,
+      maxRetries: 3,
     })
 
     // Save AI message
     const aiMessageId = crypto.randomUUID()
     await db.execute(
-      `INSERT INTO debate_messages (id, debate_id, role, content, created_at)
+      `INSERT INTO debate_messages (id, debate_id, role, content, timestamp)
        VALUES (?, ?, 'assistant', ?, CURRENT_TIMESTAMP())`,
       [aiMessageId, debateId, aiResponse],
     )

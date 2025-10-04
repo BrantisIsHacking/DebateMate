@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSnowflakeClient } from "@/lib/snowflake"
 
-export async function POST(request: NextRequest, { params }: { params: { debateId: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ debateId: string }> }) {
   try {
-    const { debateId } = params
+    const { debateId } = await params
 
     if (!debateId) {
       return NextResponse.json({ error: "Debate ID is required" }, { status: 400 })

@@ -1,4 +1,5 @@
 import { generateText } from "ai"
+import { google } from "@ai-sdk/google"
 
 export interface ArgumentScores {
   clarity: number
@@ -17,7 +18,7 @@ export interface Fallacy {
 export async function analyzeArgument(argument: string): Promise<ArgumentScores> {
   try {
     const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+      model: google("gemini-1.5-flash"),
       prompt: `Analyze this debate argument and score it on the following criteria (0-100 for each):
 
 1. Clarity: How clear and well-structured is the argument?
@@ -58,7 +59,7 @@ Respond ONLY with a JSON object in this exact format:
 export async function detectFallacies(argument: string): Promise<Fallacy[]> {
   try {
     const { text } = await generateText({
-      model: "openai/gpt-4o-mini",
+      model: google("gemini-1.5-flash"),
       prompt: `Analyze this debate argument for logical fallacies. Identify any fallacies present.
 
 Common fallacies to check for:

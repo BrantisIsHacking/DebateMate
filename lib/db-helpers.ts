@@ -1,12 +1,14 @@
 // Database helper functions for common operations
-import { getSnowflakeClient } from "./snowflake"
+import { getSnowflakeClient } from "./snowflake.js"
 import { v4 as uuidv4 } from "uuid"
 import { randomUUID } from "crypto"
+import bcrypt from "bcryptjs"
 
 export interface User {
   id: string
   email: string
   name: string
+  password_hash: string
   created_at: string
   updated_at: string
 }
@@ -63,11 +65,18 @@ export interface ArgumentScore {
 }
 
 // User operations
-export async function createUser(email: string, name: string): Promise<User> {
+export async function createUser(email: string, name: string, password: string): Promise<User> {
   const db = getSnowflakeClient()
   const id = uuidv4()
+  
+  // Hash the password before storing
+  const saltRounds = 12
+  const passwordHash = await bcrypt.hash(password, saltRounds)
 
-  await db.execute(`INSERT INTO users (id, email, name) VALUES (?, ?, ?)`, [id, email, name])
+  await db.execute(
+    `INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)`, 
+    [id, email, name, passwordHash]
+  )
 
   const result = await db.query<User>(`SELECT * FROM users WHERE id = ?`, [id])
 
@@ -78,14 +87,33 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   const db = getSnowflakeClient()
   const result = await db.query<User>(`SELECT * FROM users WHERE email = ?`, [email])
 
-  return result.data[0] || null
+  if (!result.data[0]) {
+    return null
+  }
+
+  const rawUser = result.data[0]
+  
+  // Convert Snowflake uppercase column names to lowercase
+  return {
+    id: rawUser.ID || rawUser.id,
+    email: rawUser.EMAIL || rawUser.email,
+    name: rawUser.NAME || rawUser.name,
+    password_hash: rawUser.PASSWORD_HASH || rawUser.password_hash,
+    created_at: rawUser.CREATED_AT || rawUser.created_at,
+    updated_at: rawUser.UPDATED_AT || rawUser.updated_at,
+  }
+}
+
+// Password verification function
+export async function verifyPassword(password: string, passwordHash: string): Promise<boolean> {
+  return await bcrypt.compare(password, passwordHash)
 }
 
 // Debate operations
 export async function createDebate(
   userId: string,
   topic: string,
-  position: string,
+  position: "for" | "against",
   opponentType: string,
 ): Promise<Debate> {
   const db = getSnowflakeClient()
@@ -101,10 +129,11 @@ export async function createDebate(
     id: debateId,
     user_id: userId,
     topic,
-    position,
+    position: position as "for" | "against",
     opponent_type: opponentType,
-    status: "active",
+    status: "active" as const,
     turn_count: 0,
+    created_at: new Date().toISOString(),
   }
 }
 
@@ -118,7 +147,18 @@ export async function getUserDebates(userId: string): Promise<Debate[]> {
     [userId],
   )
 
-  return result.data
+  // Convert Snowflake uppercase column names to lowercase
+  return result.data.map((debate: any) => ({
+    id: debate.ID || debate.id,
+    user_id: debate.USER_ID || debate.user_id,
+    topic: debate.TOPIC || debate.topic,
+    position: (debate.POSITION || debate.position) as "for" | "against",
+    opponent_type: debate.OPPONENT_TYPE || debate.opponent_type,
+    status: (debate.STATUS || debate.status) as "active" | "completed" | "abandoned",
+    turn_count: debate.TURN_COUNT || debate.turn_count || 0,
+    created_at: debate.CREATED_AT || debate.created_at,
+    completed_at: debate.COMPLETED_AT || debate.completed_at,
+  }))
 }
 
 // Message operations
@@ -146,36 +186,39 @@ export async function getDebateMessages(debateId: string): Promise<DebateMessage
   const db = getSnowflakeClient()
   const result = await db.query(
     `SELECT 
-      id,
-      role,
-      content,
-      fallacies_detected,
-      clarity_score,
-      evidence_score,
-      logic_score,
-      persuasiveness_score,
-      overall_score,
-      created_at
-    FROM debate_messages 
-    WHERE debate_id = ? 
-    ORDER BY created_at ASC`,
+      dm.id,
+      dm.role,
+      dm.content,
+      dm.fallacies_detected,
+      dm.timestamp,
+      asc.clarity_score,
+      asc.evidence_score,
+      asc.logic_score,
+      asc.persuasiveness_score,
+      asc.overall_score
+    FROM debate_messages dm
+    LEFT JOIN argument_scores asc ON dm.id = asc.message_id
+    WHERE dm.debate_id = ? 
+    ORDER BY dm.timestamp ASC`,
     [debateId],
   )
 
   return result.data.map((msg: any) => ({
-    id: msg.id,
-    role: msg.role,
-    content: msg.content,
-    timestamp: msg.created_at,
-    fallacies: msg.fallacies_detected ? JSON.parse(msg.fallacies_detected) : undefined,
+    id: msg.ID || msg.id,
+    debate_id: debateId,
+    role: msg.ROLE || msg.role,
+    content: msg.CONTENT || msg.content,
+    timestamp: msg.TIMESTAMP || msg.timestamp,
+    fallacies: (msg.FALLACIES_DETECTED || msg.fallacies_detected) ? 
+      JSON.parse(msg.FALLACIES_DETECTED || msg.fallacies_detected) : undefined,
     scores:
-      msg.role === "user"
+      (msg.ROLE || msg.role) === "user"
         ? {
-            clarity: msg.clarity_score,
-            evidence: msg.evidence_score,
-            logic: msg.logic_score,
-            persuasiveness: msg.persuasiveness_score,
-            overall: msg.overall_score,
+            clarity: msg.CLARITY_SCORE || msg.clarity_score || 0,
+            evidence: msg.EVIDENCE_SCORE || msg.evidence_score || 0,
+            logic: msg.LOGIC_SCORE || msg.logic_score || 0,
+            persuasiveness: msg.PERSUASIVENESS_SCORE || msg.persuasiveness_score || 0,
+            overall: msg.OVERALL_SCORE || msg.overall_score || 0,
           }
         : undefined,
   }))
@@ -232,35 +275,36 @@ export async function getUserAnalytics(userId: string, days = 30) {
      AND dm.role = 'user'
      AND dm.fallacies_detected IS NOT NULL
      AND dm.fallacies_detected != '[]'
-     AND dm.created_at >= DATEADD(day, -?, CURRENT_TIMESTAMP())`,
+     AND d.created_at >= DATEADD(day, -?, CURRENT_TIMESTAMP())`,
     [userId, days],
   )
 
   // Get average scores
   const scoresResult = await db.query(
     `SELECT 
-      AVG(clarity_score) as avg_clarity,
-      AVG(evidence_score) as avg_evidence,
-      AVG(logic_score) as avg_logic,
-      AVG(persuasiveness_score) as avg_persuasiveness,
-      AVG(overall_score) as avg_overall
-     FROM debate_messages dm
+      AVG(asc.clarity_score) as avg_clarity,
+      AVG(asc.evidence_score) as avg_evidence,
+      AVG(asc.logic_score) as avg_logic,
+      AVG(asc.persuasiveness_score) as avg_persuasiveness,
+      AVG(asc.overall_score) as avg_overall
+     FROM argument_scores asc
+     JOIN debate_messages dm ON asc.message_id = dm.id
      JOIN debates d ON dm.debate_id = d.id
      WHERE d.user_id = ? 
      AND dm.role = 'user'
-     AND dm.created_at >= DATEADD(day, -?, CURRENT_TIMESTAMP())`,
+     AND d.created_at >= DATEADD(day, -?, CURRENT_TIMESTAMP())`,
     [userId, days],
   )
 
   return {
-    totalDebates: debatesResult.data[0]?.total || 0,
-    totalFallacies: fallaciesResult.data[0]?.total || 0,
+    totalDebates: debatesResult.data[0]?.TOTAL || debatesResult.data[0]?.total || 0,
+    totalFallacies: fallaciesResult.data[0]?.TOTAL || fallaciesResult.data[0]?.total || 0,
     averageScores: {
-      avg_clarity: scoresResult.data[0]?.avg_clarity || 0,
-      avg_evidence: scoresResult.data[0]?.avg_evidence || 0,
-      avg_logic: scoresResult.data[0]?.avg_logic || 0,
-      avg_persuasiveness: scoresResult.data[0]?.avg_persuasiveness || 0,
-      avg_overall: scoresResult.data[0]?.avg_overall || 0,
+      avg_clarity: scoresResult.data[0]?.AVG_CLARITY || scoresResult.data[0]?.avg_clarity || 0,
+      avg_evidence: scoresResult.data[0]?.AVG_EVIDENCE || scoresResult.data[0]?.avg_evidence || 0,
+      avg_logic: scoresResult.data[0]?.AVG_LOGIC || scoresResult.data[0]?.avg_logic || 0,
+      avg_persuasiveness: scoresResult.data[0]?.AVG_PERSUASIVENESS || scoresResult.data[0]?.avg_persuasiveness || 0,
+      avg_overall: scoresResult.data[0]?.AVG_OVERALL || scoresResult.data[0]?.avg_overall || 0,
     },
   }
 }
