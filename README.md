@@ -83,35 +83,6 @@ A cutting-edge AI-powered debate platform that helps users improve their argumen
 
 5. **Open [http://localhost:3000](http://localhost:3000)** in your browser
 
-## 🏗️ Project Structure
-
-```
-hackru-2025/
-├── app/                          # Next.js App Router
-│   ├── api/                      # API Routes
-│   │   ├── analytics/            # User analytics endpoints
-│   │   ├── auth/                 # Authentication endpoints
-│   │   ├── debates/              # Debate management endpoints
-│   │   └── speech/               # Text-to-speech endpoints
-│   ├── auth/                     # Authentication pages
-│   ├── dashboard/                # User dashboard
-│   ├── debate/                   # Debate arena and creation
-│   ├── feedback/                 # Post-debate analysis
-│   └── globals.css               # Global styles
-├── components/                   # Reusable UI components
-│   ├── ui/                       # Base UI components (Radix + TailwindCSS)
-│   ├── header.tsx                # Navigation header
-│   └── theme-provider.tsx        # Theme context provider
-├── lib/                          # Utility libraries
-│   ├── ai-helpers.ts             # AI integration utilities
-│   ├── db-helpers.ts             # Database utilities
-│   ├── snowflake.ts              # Snowflake connection
-│   └── utils.ts                  # General utilities
-├── scripts/                      # Database scripts
-│   └── 01-create-tables.sql      # Initial database setup
-└── public/                       # Static assets
-```
-
 ## 🔧 Key Technologies
 
 ### Frontend
