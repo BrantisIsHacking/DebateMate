@@ -40,7 +40,12 @@ interface Debate {
 export default function DebateArenaPage() {
   const router = useRouter()
   const params = useParams()
-  const debateId = params.debateId as string
+  const debateId = params?.debateId as string
+
+  if (!debateId) {
+    router.push("/dashboard")
+    return null
+  }
 
   const [debate, setDebate] = useState<Debate | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
