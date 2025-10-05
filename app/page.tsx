@@ -20,9 +20,6 @@ export default function LandingPage() {
             <Link href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
               How It Works
             </Link>
-            <Link href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
-              Pricing
-            </Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/auth/login">
@@ -48,16 +45,11 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/auth/signup">
               <Button size="lg" className="text-lg px-8">
-                Start Debating Free
-              </Button>
-            </Link>
-            <Link href="#how-it-works">
-              <Button size="lg" variant="outline" className="text-lg px-8 bg-transparent">
-                Watch Demo
+                Start Debating
               </Button>
             </Link>
           </div>
-          <p className="text-sm text-muted-foreground mt-6">No credit card required. Start practicing in 30 seconds.</p>
+          <p className="text-sm text-muted-foreground mt-6"></p>
         </div>
       </section>
 
