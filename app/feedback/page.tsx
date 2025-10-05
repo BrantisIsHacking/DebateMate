@@ -69,7 +69,7 @@ export default function FeedbackPage() {
       <Header />
 
       <main className="container mx-auto px-4 py-8 max-w-6xl">
-        <Button variant="ghost" onClick={() => router.push("/")} className="mb-6">
+        <Button variant="ghost" onClick={() => router.push("/dashboard")} className="mb-6">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Dashboard
         </Button>
@@ -189,13 +189,13 @@ export default function FeedbackPage() {
                     Logical Fallacies Detected
                   </CardTitle>
                   <CardDescription>
-                    {analysis.logicalFallacies.length === 0
+                    {analysis.logicalFallacies?.length === 0
                       ? "Great job! No logical fallacies detected."
-                      : `Found ${analysis.logicalFallacies.length} logical fallacy(ies) in your argument.`}
+                      : `Found ${analysis.logicalFallacies?.length || 0} logical fallacy(ies) in your argument.`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {analysis.logicalFallacies.length === 0 ? (
+                  {analysis.logicalFallacies?.length === 0 ? (
                     <div className="flex items-center gap-3 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
                       <p className="text-sm text-emerald-500">
@@ -203,7 +203,7 @@ export default function FeedbackPage() {
                       </p>
                     </div>
                   ) : (
-                    analysis.logicalFallacies.map((fallacy: any, index: number) => (
+                    analysis.logicalFallacies?.map((fallacy: any, index: number) => (
                       <div key={index} className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
                         <div className="flex items-start gap-3">
                           <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
@@ -235,7 +235,7 @@ export default function FeedbackPage() {
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-3">
-                      {analysis.strengths.map((strength: string, index: number) => (
+                      {analysis.strengths?.map((strength: string, index: number) => (
                         <li key={index} className="flex items-start gap-2 text-sm">
                           <span className="text-emerald-500 mt-1">•</span>
                           <span className="leading-relaxed">{strength}</span>
@@ -254,7 +254,7 @@ export default function FeedbackPage() {
                   </CardHeader>
                   <CardContent>
                     <ul className="space-y-3">
-                      {analysis.weaknesses.map((weakness: string, index: number) => (
+                      {analysis.weaknesses?.map((weakness: string, index: number) => (
                         <li key={index} className="flex items-start gap-2 text-sm">
                           <span className="text-yellow-500 mt-1">•</span>
                           <span className="leading-relaxed">{weakness}</span>
@@ -277,7 +277,7 @@ export default function FeedbackPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {analysis.suggestions.map((suggestion: string, index: number) => (
+                    {analysis.suggestions?.map((suggestion: string, index: number) => (
                       <div
                         key={index}
                         className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20"
@@ -297,10 +297,10 @@ export default function FeedbackPage() {
 
         {/* Action Buttons */}
         <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
-          <Button variant="outline" onClick={() => router.push("/")}>
+          <Button variant="outline" onClick={() => router.push("/dashboard")}>
             Return to Dashboard
           </Button>
-          <Button onClick={() => router.push("/arena")}>
+          <Button onClick={() => router.push("/debate/new")}>
             <MessageSquare className="h-4 w-4 mr-2" />
             Start New Debate
           </Button>
