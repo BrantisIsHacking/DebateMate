@@ -216,18 +216,6 @@ pnpm start
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## 🏆 HackRU 2025
 
 Built with ❤️ for HackRU 2025 - Empowering the next generation of debaters with AI technology.
-
-## 📞 Support
-
-For support, email [support@debatemate.tech](mailto:support@debatemate.tech) or open an issue on GitHub.
-
----
-
-**Made with 🧠 by the DebateMate.Tech Team**
