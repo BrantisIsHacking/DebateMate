@@ -14,6 +14,22 @@ export interface Fallacy {
   severity: "low" | "medium" | "high"
 }
 const API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+
+if (!API_KEY && typeof window === 'undefined') {
+  console.log(`
+🤖 AI Features Configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  No Gemini API key found - using fallback analysis mode
+📝 To enable full AI features, set up your API key:
+   1. Get a key from: https://aistudio.google.com/app/apikey
+   2. Add to .env.local: GOOGLE_GENERATIVE_AI_API_KEY=your_key_here
+   3. Restart the development server
+
+💡 See GEMINI_SETUP.md for detailed instructions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`)
+}
+
 const ai = new GoogleGenAI(API_KEY ? { apiKey: API_KEY } : {})
 
 async function callGenAI(prompt: string, opts?: { temperature?: number; maxOutputTokens?: number }) {
@@ -21,23 +37,28 @@ async function callGenAI(prompt: string, opts?: { temperature?: number; maxOutpu
   const maxOutputTokens = opts?.maxOutputTokens ?? 600
 
   if (!API_KEY) {
-    console.warn('[v0] No Gemini API key found in environment; calls may fail if the SDK requires a key')
+    throw new Error('No Gemini API key configured')
   }
 
-  const resp: any = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
-    contents: prompt,
-    config: { temperature, maxOutputTokens },
-  })
+  try {
+    const resp: any = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+      config: { temperature, maxOutputTokens },
+    })
 
-  // Prefer .text helper, fallback to common fields
-  let text = ''
-  if (resp) {
-    text = typeof resp.text === 'string' ? resp.text : ''
-    text = text || resp?.output?.[0]?.content?.[0]?.text || resp?.candidates?.[0]?.text || ''
+    // Prefer .text helper, fallback to common fields
+    let text = ''
+    if (resp) {
+      text = typeof resp.text === 'string' ? resp.text : ''
+      text = text || resp?.output?.[0]?.content?.[0]?.text || resp?.candidates?.[0]?.text || ''
+    }
+
+    return text
+  } catch (error) {
+    console.error('[AI] Gemini API call failed:', error)
+    throw error
   }
-
-  return text
 }
 
 function extractJsonLike(input: string): string | null {
@@ -50,25 +71,103 @@ function extractJsonLike(input: string): string | null {
   return null
 }
 
+// Fallback analysis when AI is not available
+function analyzeArgumentFallback(argument: string): ArgumentScores {
+  console.log(`[AI Fallback] Analyzing: "${argument.substring(0, 50)}..."`)
+  
+  const text = argument.toLowerCase()
+  const wordCount = argument.split(/\s+/).length
+  
+  console.log(`[AI Fallback] Word count: ${wordCount}`)
+  
+  // Basic heuristic analysis
+  let clarity = 50
+  let evidence = 50
+  let logic = 50
+  let persuasiveness = 50
+  
+  // Clarity factors
+  if (wordCount > 10) clarity += 10
+  if (wordCount > 30) clarity += 10
+  if (wordCount > 50) clarity += 5
+  if (argument.includes('.') || argument.includes('!') || argument.includes('?')) clarity += 5
+  if (/\b(first|second|third|finally|therefore|however|moreover)\b/.test(text)) clarity += 10
+  
+  // Evidence factors
+  if (/\b(study|research|data|statistics|evidence|according to|study shows)\b/.test(text)) evidence += 20
+  if (/\b(percent|%|\d+)\b/.test(text)) evidence += 15
+  if (/\b(example|instance|case|specifically)\b/.test(text)) evidence += 10
+  if (/\b(source|study|report|survey)\b/.test(text)) evidence += 10
+  
+  // Logic factors
+  if (/\b(because|therefore|thus|consequently|as a result|due to)\b/.test(text)) logic += 15
+  if (/\b(if|then|when|while|although|however)\b/.test(text)) logic += 10
+  if (/\b(cause|effect|reason|factor)\b/.test(text)) logic += 10
+  if (wordCount > 20) logic += 5
+  
+  // Persuasiveness factors
+  if (/\b(should|must|need to|important|critical|essential)\b/.test(text)) persuasiveness += 10
+  if (/\b(clearly|obviously|certainly|undoubtedly)\b/.test(text)) persuasiveness += 5
+  if (/\b(benefit|advantage|improve|better|solution)\b/.test(text)) persuasiveness += 10
+  if (/\b(problem|issue|concern|challenge)\b/.test(text)) persuasiveness += 5
+  if (wordCount > 25) persuasiveness += 10
+  
+  // Cap at 100
+  clarity = Math.min(100, clarity)
+  evidence = Math.min(100, evidence)
+  logic = Math.min(100, logic)
+  persuasiveness = Math.min(100, persuasiveness)  // FIXED: was using logic instead of persuasiveness
+  
+  const overall = Math.round((clarity + evidence + logic + persuasiveness) / 4)
+  
+  const result = { clarity, evidence, logic, persuasiveness, overall }
+  console.log(`[AI Fallback] Calculated scores:`, result)
+  
+  return result
+}
+
 export async function analyzeArgument(argument: string): Promise<ArgumentScores> {
+  console.log(`[AI] Analyzing argument: "${argument.substring(0, 100)}..."`)
+  
   try {
-    const prompt = `Analyze this debate argument and score it on the following criteria (0-100 for each):
+    // Check if API key is available
+    if (!API_KEY) {
+      console.log('[AI] No Gemini API key found. Using fallback analysis.')
+      const fallbackResult = analyzeArgumentFallback(argument)
+      console.log('[AI] Fallback result:', fallbackResult)
+      return fallbackResult
+    }
 
-1. Clarity: How clear and well-structured is the argument?
-2. Evidence: How well-supported is it with facts, data, or examples?
-3. Logic: How logically sound and consistent is the reasoning?
-4. Persuasiveness: How compelling and convincing is the overall argument?
+    console.log('[AI] Using Gemini AI for analysis')
+    const prompt = `You are an expert debate analyst. Analyze this debate argument and provide scores from 0-100 for each criteria.
 
-Argument: "${argument}"
+Argument to analyze: "${argument}"
 
-Respond ONLY with a JSON object in this exact format:
-{"clarity": 75, "evidence": 60, "logic": 80, "persuasiveness": 70}
-`
+Scoring criteria:
+1. Clarity (0-100): How clear, well-structured, and easy to understand is the argument?
+2. Evidence (0-100): How well-supported is it with facts, data, examples, or credible sources?
+3. Logic (0-100): How logically sound and consistent is the reasoning? Are there logical connections?
+4. Persuasiveness (0-100): How compelling and convincing is the overall argument?
 
-    let text = await callGenAI(prompt, { temperature: 0.3, maxOutputTokens: 200 })
+Consider these factors:
+- Length and depth of the argument
+- Use of specific examples or data
+- Logical flow and structure
+- Potential counterarguments addressed
+- Language effectiveness
+
+Respond ONLY with a JSON object in this exact format (no additional text):
+{"clarity": [score], "evidence": [score], "logic": [score], "persuasiveness": [score]}
+
+Example format: {"clarity": 85, "evidence": 70, "logic": 90, "persuasiveness": 75}`
+
+    let text = await callGenAI(prompt, { temperature: 0.2, maxOutputTokens: 300 })
+    console.log('[AI] Gemini response:', text)
 
     // Try parsing, but be robust to extra text
     let jsonStr = null
+    let scores = null
+    
     try {
       jsonStr = text.trim()
       // If it doesn't start with {, try to extract JSON substring
@@ -76,30 +175,57 @@ Respond ONLY with a JSON object in this exact format:
         const extracted = extractJsonLike(jsonStr)
         if (extracted) jsonStr = extracted
       }
+      
+      if (jsonStr) {
+        scores = JSON.parse(jsonStr)
+        console.log('[AI] Parsed scores from Gemini:', scores)
+        
+        // Validate that all required fields are present and are numbers
+        if (typeof scores.clarity !== 'number' || 
+            typeof scores.evidence !== 'number' || 
+            typeof scores.logic !== 'number' || 
+            typeof scores.persuasiveness !== 'number') {
+          throw new Error('Invalid score format')
+        }
+        
+        // Clamp scores to 0-100 range
+        scores.clarity = Math.max(0, Math.min(100, Math.round(scores.clarity)))
+        scores.evidence = Math.max(0, Math.min(100, Math.round(scores.evidence)))
+        scores.logic = Math.max(0, Math.min(100, Math.round(scores.logic)))
+        scores.persuasiveness = Math.max(0, Math.min(100, Math.round(scores.persuasiveness)))
+      }
     } catch (e) {
-      jsonStr = null
+      console.warn('[AI] Failed to parse Gemini response, using fallback analysis:', e)
+      const fallbackResult = analyzeArgumentFallback(argument)
+      console.log('[AI] Fallback result after parse error:', fallbackResult)
+      return fallbackResult
     }
 
-    const scores = jsonStr ? JSON.parse(jsonStr) : { clarity: 50, evidence: 50, logic: 50, persuasiveness: 50 }
+    if (!scores) {
+      console.warn('[AI] No valid scores from Gemini, using fallback analysis')
+      const fallbackResult = analyzeArgumentFallback(argument)
+      console.log('[AI] Fallback result after no scores:', fallbackResult)
+      return fallbackResult
+    }
+
     const overall = Math.round((scores.clarity + scores.evidence + scores.logic + scores.persuasiveness) / 4)
 
-    return {
+    const finalResult = {
       clarity: scores.clarity,
       evidence: scores.evidence,
       logic: scores.logic,
       persuasiveness: scores.persuasiveness,
       overall,
     }
+    
+    console.log('[AI] Final Gemini result:', finalResult)
+    return finalResult
   } catch (error) {
-    console.error("[v0] Error analyzing argument:", error)
-    // Return default scores on error
-    return {
-      clarity: 50,
-      evidence: 50,
-      logic: 50,
-      persuasiveness: 50,
-      overall: 50,
-    }
+    console.error("[AI] Error analyzing argument:", error)
+    // Return fallback analysis on error
+    const fallbackResult = analyzeArgumentFallback(argument)
+    console.log('[AI] Fallback result after error:', fallbackResult)
+    return fallbackResult
   }
 }
 
