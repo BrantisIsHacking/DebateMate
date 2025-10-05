@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { generateText } from "ai"
-import { google } from "@ai-sdk/google"
+import { GoogleGenAI } from '@google/genai';
 import { getSnowflakeClient } from "@/lib/snowflake"
 import { analyzeArgument, detectFallacies } from "@/lib/ai-helpers"
 
@@ -54,11 +53,13 @@ export async function POST(request: NextRequest) {
         scores.overall,
       ],
     )
-
+    
     // Generate AI opponent response
+  const API_KEY = process.env.GEMINI_API_KEY || 'YOUR_API_KEY_HERE';
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
     const opponentPersona = getOpponentPersona(debate.opponent_type)
     const systemPrompt = `You are debating as a ${debate.opponent_type}. ${opponentPersona}
-
+    
 The debate topic is: "${debate.topic}"
 You are arguing ${debate.position === "for" ? "AGAINST" : "FOR"} this statement.
 
@@ -70,16 +71,29 @@ Address the opponent's points directly and present strong counterarguments.`
       content: msg.CONTENT || msg.content,
     })) as Array<{role: "user" | "assistant", content: string}>
     
-    const { text: aiResponse } = await generateText({
-      model: google("gemini-1.5-flash"),
-      messages: [
-        { role: "system" as const, content: systemPrompt }, 
-        ...conversationHistory, 
-        { role: "user" as const, content: message }
-      ],
-      temperature: 0.8,
-      maxRetries: 3,
+    // Compose a single prompt string for the GenAI SDK (system + history + user)
+    const historyText = conversationHistory
+      .map((h) => `${h.role.toUpperCase()}: ${h.content}`)
+      .join('\n')
+
+    const prompt = `${systemPrompt}\n\nConversation so far:\n${historyText}\n\nUser: ${message}\n\nAssistant:`
+
+    const genResp: any = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: prompt,
+      config: {
+        temperature: 0.8,
+        maxOutputTokens: 600,
+      },
     })
+
+    // Prefer the SDK-provided .text helper when available
+    let aiResponse = ''
+    if (genResp) {
+      aiResponse = (genResp.text && typeof genResp.text === 'string') ? genResp.text : ''
+      // fallback to common fields
+      aiResponse = aiResponse || genResp?.output?.[0]?.content?.[0]?.text || genResp?.candidates?.[0]?.text || ''
+    }
 
     // Save AI message
     const aiMessageId = crypto.randomUUID()

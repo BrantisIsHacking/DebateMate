@@ -23,10 +23,14 @@ export async function POST(request: NextRequest) {
     // For now, we'll use the browser's built-in speech synthesis
     // In production, you would integrate with ElevenLabs API here
     // Example ElevenLabs integration:
-    /*
+    
     const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY
     const VOICE_ID = process.env.ELEVENLABS_VOICE_ID
-    
+
+    if (!ELEVENLABS_API_KEY || !VOICE_ID) {
+      return NextResponse.json({ error: "Missing ElevenLabs API key or Voice ID" }, { status: 500 })
+    }
+
     const response = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       {
@@ -34,7 +38,7 @@ export async function POST(request: NextRequest) {
         headers: {
           'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY
+          'xi-api-key': ELEVENLABS_API_KEY as string
         },
         body: JSON.stringify({
           text,
@@ -53,7 +57,7 @@ export async function POST(request: NextRequest) {
         'Content-Type': 'audio/mpeg',
       },
     })
-    */
+  
 
     // Placeholder response - in production, return actual audio
     return NextResponse.json({
