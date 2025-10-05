@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
-import { Brain, Send, AlertTriangle, CheckCircle, XCircle, Volume2 } from "lucide-react"
+import { Brain, Send, AlertTriangle, CheckCircle, XCircle, Volume2, VolumeX } from "lucide-react"
 
 interface Message {
   id: string
@@ -47,6 +47,7 @@ export default function DebateArenaPage() {
   const [currentMessage, setCurrentMessage] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [audioCache, setAudioCache] = useState<Map<string, string>>(new Map())
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -64,6 +65,13 @@ export default function DebateArenaPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [messages])
+
+  // Cleanup audio cache on unmount
+  useEffect(() => {
+    return () => {
+      audioCache.forEach(url => URL.revokeObjectURL(url))
+    }
+  }, [])
 
   const fetchDebate = async () => {
     try {
@@ -112,8 +120,33 @@ export default function DebateArenaPage() {
   }
 
   const handleSpeak = async (text: string) => {
+    if (!text || text.trim().length === 0) return
+    
     setIsSpeaking(true)
+    
     try {
+      // Create a cache key based on text and voice
+      const cacheKey = `${text.substring(0, 100)}-${debate?.opponent_type}`
+      
+      // Check if we have cached audio
+      if (audioCache.has(cacheKey)) {
+        const audioUrl = audioCache.get(cacheKey)!
+        const audio = new Audio(audioUrl)
+        audio.play()
+        audio.onended = () => setIsSpeaking(false)
+        audio.onerror = () => {
+          // Remove from cache if corrupted
+          setAudioCache(prev => {
+            const newCache = new Map(prev)
+            newCache.delete(cacheKey)
+            return newCache
+          })
+          setIsSpeaking(false)
+        }
+        return
+      }
+
+      // Try ElevenLabs first, with browser TTS as fallback
       const response = await fetch("/api/speech/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,15 +154,84 @@ export default function DebateArenaPage() {
       })
 
       if (response.ok) {
-        const audioBlob = await response.blob()
-        const audioUrl = URL.createObjectURL(audioBlob)
-        const audio = new Audio(audioUrl)
-        audio.play()
-        audio.onended = () => setIsSpeaking(false)
+        const contentType = response.headers.get('content-type')
+        
+        if (contentType?.includes('application/json')) {
+          // API returned fallback instructions
+          const data = await response.json()
+          if (data.useBrowserTTS) {
+            // Use browser TTS as fallback
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance(text)
+              
+              // Configure voice based on opponent type
+              const voices = speechSynthesis.getVoices()
+              if (voices.length > 0) {
+                // Try to find appropriate voice
+                let selectedVoice = voices.find(voice => 
+                  voice.lang.startsWith('en') && !voice.localService
+                ) || voices.find(voice => voice.lang.startsWith('en'))
+                
+                if (selectedVoice) {
+                  utterance.voice = selectedVoice
+                }
+              }
+              
+              utterance.rate = 1.1 // Slightly faster
+              utterance.pitch = debate?.opponent_type === 'politician' ? 1.1 : 
+                              debate?.opponent_type === 'scientist' ? 0.9 : 1.0
+              
+              utterance.onend = () => setIsSpeaking(false)
+              utterance.onerror = () => setIsSpeaking(false)
+              
+              speechSynthesis.speak(utterance)
+            } else {
+              console.warn('Browser TTS not supported')
+              setIsSpeaking(false)
+            }
+          }
+        } else {
+          // Got audio blob from ElevenLabs
+          const audioBlob = await response.blob()
+          const audioUrl = URL.createObjectURL(audioBlob)
+          
+          // Cache the audio URL
+          setAudioCache(prev => {
+            const newCache = new Map(prev)
+            // Limit cache size to prevent memory issues
+            if (newCache.size >= 10) {
+              const firstEntry = newCache.entries().next().value
+              if (firstEntry) {
+                const [firstKey, firstUrl] = firstEntry
+                URL.revokeObjectURL(firstUrl)
+                newCache.delete(firstKey)
+              }
+            }
+            newCache.set(cacheKey, audioUrl)
+            return newCache
+          })
+          
+          const audio = new Audio(audioUrl)
+          audio.play()
+          audio.onended = () => setIsSpeaking(false)
+          audio.onerror = () => setIsSpeaking(false)
+        }
+      } else {
+        throw new Error('Failed to synthesize speech')
       }
     } catch (error) {
       console.error("[v0] Error synthesizing speech:", error)
-      setIsSpeaking(false)
+      
+      // Fallback to browser TTS
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text)
+        utterance.rate = 1.1
+        utterance.onend = () => setIsSpeaking(false)
+        utterance.onerror = () => setIsSpeaking(false)
+        speechSynthesis.speak(utterance)
+      } else {
+        setIsSpeaking(false)
+      }
     }
   }
 
@@ -176,6 +278,11 @@ export default function DebateArenaPage() {
               <Badge variant="secondary" className="text-xs">
                 vs {debate.opponent_type}
               </Badge>
+              {isSpeaking && (
+                <Badge variant="outline" className="text-xs text-blue-600 animate-pulse">
+                  🔊 Playing Audio
+                </Badge>
+              )}
             </div>
           </div>
         </div>
@@ -216,8 +323,13 @@ export default function DebateArenaPage() {
                             className="h-6 w-6"
                             onClick={() => handleSpeak(message.content)}
                             disabled={isSpeaking}
+                            title={isSpeaking ? "Playing audio..." : "Play audio"}
                           >
-                            <Volume2 className="h-4 w-4" />
+                            {isSpeaking ? (
+                              <VolumeX className="h-4 w-4 animate-pulse" />
+                            ) : (
+                              <Volume2 className="h-4 w-4" />
+                            )}
                           </Button>
                         )}
                       </div>
